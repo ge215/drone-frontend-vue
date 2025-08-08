@@ -1,0 +1,29 @@
+/* src/assets/main.css */
+
+/* 我們之前新增的全域基礎樣式，保持不變 */
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+}
+
+
+/* *** FIX: 修改這個區塊 *** */
+/* 這是 Vue 預設的樣式，我們將它修改得更適合我們的佈局 */
+@media (min-width: 1024px) {
+  /* 移除 body 的 display: flex 和 place-items: center */
+  /* body {
+    display: flex;
+    place-items: center;
+  } */
+
+  /* 將 #app 的網格佈局移除，讓它恢復正常的區塊佈局 */
+  #app {
+    /* display: grid; */
+    /* grid-template-columns: 1fr 1fr; */
+    /* padding: 0 2rem; */
+  }
+}
