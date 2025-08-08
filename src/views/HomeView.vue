@@ -59,7 +59,7 @@ const handleLogout = () => {
 .sidebar-nav a:hover, .sidebar-nav a.router-link-exact-active { background-color: #34495e; color: white; }
 .sidebar-footer { padding: 1.5rem; border-top: 1px solid #34495e; }
 .logout-button { width: 100%; padding: 0.75rem; background-color: #e74c3c; color: white; border: none; border-radius: 4px; cursor: pointer; }
-.main-content { flex-grow: 1; display: flex; flex-direction: column; background-color: #f0f2f5; overflow-y: auto; }
+.main-content { flex-grow: 1; display: flex; flex-direction: column; background-color: #ffffff; overflow-y: auto; }
 .main-header { padding: 1rem 2rem; background-color: white; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05); text-align: right; }
 .page-content { flex-grow: 1; }
 </style>
