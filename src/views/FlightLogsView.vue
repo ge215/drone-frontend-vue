@@ -2,8 +2,27 @@
   <div class="page-container">
     <h1>飛行日誌管理</h1>
 
+    <!-- 編輯日誌區塊 (預設隱藏) -->
+    <div v-if="isEditing" class="container">
+      <h2>編輯飛行日誌</h2>
+      <form @submit.prevent="handleUpdateLog">
+        <input type="text" v-model="editingLog.mission_name" placeholder="任務名稱" required>
+        <input type="text" v-model="editingLog.location" placeholder="地點" required>
+        <input type="date" v-model="editingLog.flight_date" required>
+        <input type="number" v-model="editingLog.duration_minutes" placeholder="飛行時長 (分鐘)" required>
+        <label>選擇使用的設備 (可按住 Ctrl 多選):</label>
+        <select v-model="editingLog.equipment_used" multiple required>
+          <option v-for="equip in equipmentList" :key="equip.id" :value="equip.id">
+            {{ equip.model_name }} ({{ equip.serial_number }})
+          </option>
+        </select>
+        <button type="submit">儲存變更</button>
+        <button type="button" @click="cancelEdit" style="background-color: #6c757d; margin-top: 0.5em;">取消</button>
+      </form>
+    </div>
+
     <!-- 新增日誌區塊 -->
-    <div class="container">
+    <div v-else class="container">
       <h2>新增飛行日誌</h2>
       <form @submit.prevent="handleAddLog">
         <input type="text" v-model="newLog.mission_name" placeholder="任務名稱" required>
@@ -29,10 +48,9 @@
         <div v-for="log in logs" :key="log.id" class="log-entry">
           <div class="log-header">
             <h3>任務名稱: {{ log.mission_name }}</h3>
-            <!-- 只有日誌擁有者才能看到按鈕 -->
             <div v-if="store.username === log.pilot_username" class="action-buttons">
-              <!-- 編輯功能暫未實現 -->
-              <button class="edit-button" disabled>編輯</button>
+              <!-- *** FIX: 移除 disabled 屬性 *** -->
+              <button @click="handleEditClick(log)" class="edit-button">編輯</button>
               <button @click="handleDeleteLog(log.id)" class="delete-button">刪除</button>
             </div>
           </div>
@@ -50,10 +68,10 @@ import { ref, onMounted } from 'vue';
 import axios from 'axios';
 import { store } from '../store.js';
 
-// --- 響應式狀態 ---
 const logs = ref([]);
 const equipmentList = ref([]);
 const isLoading = ref(true);
+const isEditing = ref(false);
 const newLog = ref({
   mission_name: '',
   location: '',
@@ -61,12 +79,10 @@ const newLog = ref({
   duration_minutes: null,
   equipment_used: [],
 });
+const editingLog = ref(null);
 
 const apiUrlBase = 'https://drone-api-v2.onrender.com';
 
-// --- API 請求函式 ---
-
-// 獲取日誌列表
 const fetchLogs = async () => {
   isLoading.value = true;
   try {
@@ -80,7 +96,6 @@ const fetchLogs = async () => {
   }
 };
 
-// 獲取設備列表
 const fetchEquipment = async () => {
   if (!store.authToken) return;
   try {
@@ -93,7 +108,6 @@ const fetchEquipment = async () => {
   }
 };
 
-// 新增日誌
 const handleAddLog = async () => {
   if (!store.authToken) return;
   try {
@@ -103,9 +117,7 @@ const handleAddLog = async () => {
         'Authorization': `Token ${store.authToken}`
       }
     });
-    // 清空表單
     newLog.value = { mission_name: '', location: '', flight_date: '', duration_minutes: null, equipment_used: [] };
-    // 重新整理列表
     fetchLogs();
   } catch (error) {
     console.error('新增日誌失敗:', error.response.data);
@@ -113,14 +125,12 @@ const handleAddLog = async () => {
   }
 };
 
-// 刪除日誌
 const handleDeleteLog = async (logId) => {
   if (!store.authToken || !confirm('您確定要刪除這筆日誌嗎？')) return;
   try {
     await axios.delete(`${apiUrlBase}/api/flight-logs/${logId}/`, {
       headers: { 'Authorization': `Token ${store.authToken}` }
     });
-    // 重新整理列表
     fetchLogs();
   } catch (error) {
     console.error('刪除日誌失敗:', error);
@@ -128,9 +138,41 @@ const handleDeleteLog = async (logId) => {
   }
 };
 
+const handleEditClick = (logToEdit) => {
+  editingLog.value = JSON.parse(JSON.stringify(logToEdit));
+  isEditing.value = true;
+  if (equipmentList.value.length === 0) {
+      fetchEquipment();
+  }
+};
 
-// --- 生命週期鉤子 ---
-// onMounted 會在元件被掛載到頁面上時執行一次
+const cancelEdit = () => {
+  isEditing.value = false;
+  editingLog.value = null;
+};
+
+const handleUpdateLog = async () => {
+  if (!store.authToken || !editingLog.value) return;
+  const logId = editingLog.value.id;
+  try {
+    const payload = { ...editingLog.value };
+    delete payload.pilot_username;
+    delete payload.url;
+
+    await axios.put(`${apiUrlBase}/api/flight-logs/${logId}/`, payload, {
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Token ${store.authToken}`
+      }
+    });
+    cancelEdit();
+    fetchLogs();
+  } catch (error) {
+    console.error('更新日誌失敗:', error.response.data);
+    alert(`更新失敗: ${JSON.stringify(error.response.data)}`);
+  }
+};
+
 onMounted(() => {
   fetchLogs();
   fetchEquipment();
