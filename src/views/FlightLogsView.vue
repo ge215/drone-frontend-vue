@@ -227,8 +227,7 @@ const handleUpdateLog = async () => {
 onMounted(() => {
   fetchLogs();
   fetchEquipment();
-  // *** FIX: 暫時註解掉 fetchUsers()，讓頁面可以先正常顯示 ***
-  // fetchUsers(); 
+  fetchUsers();
 });
 </script>
 
