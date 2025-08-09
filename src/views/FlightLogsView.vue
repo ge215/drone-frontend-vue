@@ -7,30 +7,26 @@
       <h2>{{ isEditing ? '編輯飛行日誌' : '新增飛行日誌' }}</h2>
       <form @submit.prevent="isEditing ? handleUpdateLog() : handleAddLog()">
         <input type="text" v-model="formModel.mission_name" placeholder="任務名稱" required>
-        <input type="text" v-model="formModel.location" placeholder="地點" required>
+        
+        <input type="text" v-model="formModel.location" placeholder="地點文字描述 (例如：陽明山擎天崗)" required>
+        <InteractiveMap @update:coordinates="updateCoordinates" />
+
         <input type="date" v-model="formModel.flight_date" required>
         <input type="number" v-model.number="formModel.duration_minutes" placeholder="飛行時長 (分鐘)" required>
         
         <label>選擇主飛手:</label>
         <select v-model="formModel.main_pilot" required>
-          <option disabled :value="null">請選擇一位主飛手</option>
-          <option v-for="pilot in userList" :key="pilot.id" :value="pilot.id">
-            {{ pilot.username }}
-          </option>
+          <option v-for="pilot in userList" :key="pilot.id" :value="pilot.id">{{ pilot.username }}</option>
         </select>
 
-        <label>選擇副飛手 (可不選，或按住 Ctrl 多選):</label>
+        <label>選擇副飛手 (可不選):</label>
         <select v-model="formModel.assistant_pilots" multiple>
-          <option v-for="pilot in userList" :key="pilot.id" :value="pilot.id">
-            {{ pilot.username }}
-          </option>
+          <option v-for="pilot in userList" :key="pilot.id" :value="pilot.id">{{ pilot.username }}</option>
         </select>
 
-        <label>選擇使用的設備 (可按住 Ctrl 多選):</label>
+        <label>選擇使用的設備:</label>
         <select v-model="formModel.equipment_used" multiple required>
-          <option v-for="equip in equipmentList" :key="equip.id" :value="equip.id">
-            {{ equip.model_name }} ({{ equip.serial_number }})
-          </option>
+          <option v-for="equip in equipmentList" :key="equip.id" :value="equip.id">{{ equip.model_name }}</option>
         </select>
         
         <button type="submit" :disabled="isSubmitting">
@@ -43,37 +39,36 @@
 
     <!-- 日誌列表區塊 -->
     <div class="container">
-      <h2>飛行日誌列表</h2>
-      <div v-if="isLoading">
-        <SkeletonLoader v-for="n in 3" :key="n" />
-      </div>
-      <p v-else-if="logs.length === 0">目前沒有任何飛行日誌。</p>
-      <div v-else>
-        <div v-for="log in logs" :key="log.id" class="log-entry">
-          <div class="log-header">
-            <h3><i class="fa-solid fa-paper-plane"></i> 任務名稱: {{ log.mission_name }}</h3>
-            <!-- 只有主飛手才能編輯/刪除 -->
-            <div v-if="store.username === log.main_pilot_username" class="action-buttons">
-              <button @click="handleEditClick(log)" class="edit-button" :disabled="isSubmitting"><i class="fa-solid fa-pencil"></i> 編輯</button>
-              <button @click="handleDeleteLog(log.id)" class="delete-button" :disabled="isSubmitting"><i class="fa-solid fa-trash"></i> 刪除</button>
-            </div>
-          </div>
-          <p><strong><i class="fa-solid fa-location-dot"></i> 地點:</strong> {{ log.location }}</p>
-          <p><strong><i class="fa-solid fa-calendar-days"></i> 日期:</strong> {{ log.flight_date }}</p>
-          <p><strong><i class="fa-solid fa-clock"></i> 飛行時長:</strong> {{ log.duration_minutes }} 分鐘</p>
-          <p><strong><i class="fa-solid fa-user-astronaut"></i> 主飛手:</strong> {{ log.main_pilot_username }}</p>
-          
-          <div v-if="log.assistant_pilots_details && log.assistant_pilots_details.length > 0">
-            <strong><i class="fa-solid fa-users"></i> 副飛手:</strong>
-            <ul><li v-for="pilot in log.assistant_pilots_details" :key="pilot">{{ pilot }}</li></ul>
-          </div>
-
-          <div v-if="log.equipment_used_details && log.equipment_used_details.length > 0">
-            <strong><i class="fa-solid fa-toolbox"></i> 使用設備:</strong>
-            <ul><li v-for="equip in log.equipment_used_details" :key="equip">{{ equip }}</li></ul>
-          </div>
+        <h2>飛行日誌列表</h2>
+        <div v-if="isLoading">
+            <SkeletonLoader v-for="n in 3" :key="n" />
         </div>
-      </div>
+        <p v-else-if="logs.length === 0">目前沒有任何飛行日誌。</p>
+        <div v-else>
+            <div v-for="log in logs" :key="log.id" class="log-entry">
+                <div class="log-header">
+                    <h3><i class="fa-solid fa-paper-plane"></i> 任務名稱: {{ log.mission_name }}</h3>
+                    <div v-if="store.username === log.main_pilot_username" class="action-buttons">
+                        <button @click="handleEditClick(log)" class="edit-button" :disabled="isSubmitting"><i class="fa-solid fa-pencil"></i> 編輯</button>
+                        <button @click="handleDeleteLog(log.id)" class="delete-button" :disabled="isSubmitting"><i class="fa-solid fa-trash"></i> 刪除</button>
+                    </div>
+                </div>
+                <p><strong><i class="fa-solid fa-location-dot"></i> 地點:</strong> {{ log.location }}</p>
+                <p><strong><i class="fa-solid fa-calendar-days"></i> 日期:</strong> {{ log.flight_date }}</p>
+                <p><strong><i class="fa-solid fa-clock"></i> 飛行時長:</strong> {{ log.duration_minutes }} 分鐘</p>
+                <p><strong><i class="fa-solid fa-user-astronaut"></i> 主飛手:</strong> {{ log.main_pilot_username }}</p>
+                
+                <div v-if="log.assistant_pilots_details && log.assistant_pilots_details.length > 0">
+                    <strong><i class="fa-solid fa-users"></i> 副飛手:</strong>
+                    <ul><li v-for="pilot in log.assistant_pilots_details" :key="pilot">{{ pilot }}</li></ul>
+                </div>
+
+                <div v-if="log.equipment_used_details && log.equipment_used_details.length > 0">
+                    <strong><i class="fa-solid fa-toolbox"></i> 使用設備:</strong>
+                    <ul><li v-for="equip in log.equipment_used_details" :key="equip">{{ equip }}</li></ul>
+                </div>
+            </div>
+        </div>
     </div>
   </div>
 </template>
@@ -84,6 +79,7 @@ import axios from 'axios';
 import { store } from '../store.js';
 import { useToast } from 'vue-toastification';
 import SkeletonLoader from '../components/SkeletonLoader.vue';
+import InteractiveMap from '../components/InteractiveMap.vue';
 
 const toast = useToast();
 const logs = ref([]);
@@ -101,11 +97,20 @@ const initialFormState = {
   main_pilot: null,
   assistant_pilots: [],
   equipment_used: [],
+  twd97_x: null,
+  twd97_y: null,
 };
 
 const formModel = ref({ ...initialFormState });
 
 const apiUrlBase = 'https://drone-api-v2.onrender.com';
+
+const updateCoordinates = (coords) => {
+  if (coords && typeof coords.x === 'number' && typeof coords.y === 'number') {
+    formModel.value.twd97_x = coords.x.toFixed(3);
+    formModel.value.twd97_y = coords.y.toFixed(3);
+  }
+};
 
 const fetchLogs = async () => {
   isLoading.value = true;
@@ -193,6 +198,8 @@ const handleEditClick = (logToEdit) => {
       main_pilot: logToEdit.main_pilot,
       assistant_pilots: logToEdit.assistant_pilots,
       equipment_used: logToEdit.equipment_used,
+      twd97_x: logToEdit.twd97_x,
+      twd97_y: logToEdit.twd97_y,
   };
   isEditing.value = true;
 };
@@ -247,4 +254,7 @@ button { background-color: #007bff; color: white; border: none; cursor: pointer;
 .edit-button { background-color: #ffc107; }
 .delete-button { background-color: #dc3545; }
 .log-header { display: flex; justify-content: space-between; align-items: center; }
+.spinner { display: inline-block; width: 1em; height: 1em; border: 2px solid rgba(255, 255, 255, 0.3); border-radius: 50%; border-top-color: #fff; animation: spin 1s ease-in-out infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+button:disabled { opacity: 0.7; cursor: not-allowed; }
 </style>
