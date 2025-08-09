@@ -21,14 +21,17 @@
         <span><i class="fa-solid fa-user"></i> 歡迎您，{{ store.username }}</span>
       </header>
       <div class="page-content">
-        <RouterView />
+        <RouterView v-slot="{ Component }">
+          <KeepAlive>
+            <component :is="Component" />
+          </KeepAlive>
+        </RouterView>
       </div>
     </main>
   </div>
 </template>
 
 <script setup>
-// ... script 內容保持不變 ...
 import { RouterView, RouterLink, useRouter } from 'vue-router';
 import { store } from '../store.js';
 
@@ -45,10 +48,9 @@ const handleLogout = () => {
 </script>
 
 <style scoped>
-/* ... 其他樣式保持不變 ... */
 .sidebar-nav a i, .sidebar-header i, .sidebar-footer i, .main-header i {
-  margin-right: 10px; /* 讓圖示和文字之間有點間距 */
-  width: 20px; /* 固定圖示寬度，讓文字對齊 */
+  margin-right: 10px;
+  width: 20px;
   text-align: center;
 }
 .app-layout { display: flex; height: 100vh; }
@@ -59,7 +61,7 @@ const handleLogout = () => {
 .sidebar-nav a:hover, .sidebar-nav a.router-link-exact-active { background-color: #34495e; color: white; }
 .sidebar-footer { padding: 1.5rem; border-top: 1px solid #34495e; }
 .logout-button { width: 100%; padding: 0.75rem; background-color: #e74c3c; color: white; border: none; border-radius: 4px; cursor: pointer; }
-.main-content { flex-grow: 1; display: flex; flex-direction: column; background-color: #ffffff; overflow-y: auto; }
+.main-content { flex-grow: 1; display: flex; flex-direction: column; background-color: #f0f2f5; overflow-y: auto; }
 .main-header { padding: 1rem 2rem; background-color: white; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05); text-align: right; }
 .page-content { flex-grow: 1; }
 </style>
