@@ -1,10 +1,11 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import HomeView from '../views/HomeView.vue'
 import LoginView from '../views/LoginView.vue'
-import RegisterView from '../views/RegisterView.vue' // <-- 匯入註冊頁面
+import RegisterView from '../views/RegisterView.vue'
 import DashboardView from '../views/DashboardView.vue'
 import FlightLogsView from '../views/FlightLogsView.vue'
 import EquipmentView from '../views/EquipmentView.vue'
+import FlightLogDetailView from '../views/FlightLogDetailView.vue' // <-- 1. 匯入詳情頁元件
 import { store } from '../store.js'
 
 const router = createRouter({
@@ -17,7 +18,17 @@ const router = createRouter({
       meta: { requiresAuth: true },
       children: [
         { path: '', name: 'dashboard', component: DashboardView },
-        { path: 'flight-logs', name: 'flight-logs', component: FlightLogsView },
+        { 
+          path: 'flight-logs', 
+          name: 'FlightLogs', // 統一命名風格為大寫開頭
+          component: FlightLogsView 
+        },
+        { 
+          path: 'flight-logs/:id', // <-- 2. 加入詳情頁的動態路由
+          name: 'FlightLogDetail', 
+          component: FlightLogDetailView,
+          props: true 
+        },
         { path: 'equipment', name: 'equipment', component: EquipmentView }
       ]
     },

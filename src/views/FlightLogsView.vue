@@ -49,29 +49,22 @@
             <SkeletonLoader v-for="n in 3" :key="n" />
         </div>
         <p v-else-if="logs.length === 0">目前沒有任何飛行日誌。</p>
-        <div v-else>
-            <div v-for="log in logs" :key="log.id" class="log-entry">
-                <div class="log-header">
-                    <h3><i class="fa-solid fa-paper-plane"></i> 任務名稱: {{ log.mission_name }}</h3>
-                    <div v-if="store.username === log.main_pilot_username" class="action-buttons">
-                        <button @click="handleEditClick(log)" class="edit-button" :disabled="isSubmitting"><i class="fa-solid fa-pencil"></i> 編輯</button>
-                        <button @click="handleDeleteLog(log.id)" class="delete-button" :disabled="isSubmitting"><i class="fa-solid fa-trash"></i> 刪除</button>
-                    </div>
+        
+        <div v-else class="log-list">
+            <div v-for="log in logs" :key="log.id" class="log-list-item">
+            <div class="log-info">
+                <i class="fa-solid fa-paper-plane"></i>
+                <span><strong>任務名稱：</strong>{{ log.mission_name }}</span>
+            </div>
+            <div class="log-actions">
+                <RouterLink :to="{ name: 'FlightLogDetail', params: { id: log.id } }" class="action-button view-button">
+                <i class="fa-solid fa-eye"></i> 查看詳情
+                </RouterLink>
+                <div v-if="store.username === log.main_pilot_username" class="action-buttons-inline">
+                <button @click="handleEditClick(log)" class="action-button edit-button" :disabled="isSubmitting"><i class="fa-solid fa-pencil"></i> 編輯</button>
+                <button @click="handleDeleteLog(log.id)" class="action-button delete-button" :disabled="isSubmitting"><i class="fa-solid fa-trash"></i> 刪除</button>
                 </div>
-                <p><strong><i class="fa-solid fa-location-dot"></i> 地點:</strong> {{ log.location }}</p>
-                <p><strong><i class="fa-solid fa-calendar-days"></i> 日期:</strong> {{ log.flight_date }}</p>
-                <p><strong><i class="fa-solid fa-clock"></i> 飛行時長:</strong> {{ log.duration_minutes }} 分鐘</p>
-                <p><strong><i class="fa-solid fa-user-astronaut"></i> 主飛手:</strong> {{ log.main_pilot_username }}</p>
-                
-                <div v-if="log.assistant_pilots_details && log.assistant_pilots_details.length > 0">
-                    <strong><i class="fa-solid fa-users"></i> 副飛手:</strong>
-                    <ul><li v-for="pilot in log.assistant_pilots_details" :key="pilot">{{ pilot }}</li></ul>
-                </div>
-
-                <div v-if="log.equipment_used_details && log.equipment_used_details.length > 0">
-                    <strong><i class="fa-solid fa-toolbox"></i> 使用設備:</strong>
-                    <ul><li v-for="equip in log.equipment_used_details" :key="equip">{{ equip }}</li></ul>
-                </div>
+            </div>
             </div>
         </div>
     </div>
@@ -80,12 +73,14 @@
 
 <script setup>
 import { ref, onMounted } from 'vue';
+import { useRoute } from 'vue-router';
 import axios from 'axios';
 import { store } from '../store.js';
 import { useToast } from 'vue-toastification';
 import SkeletonLoader from '../components/SkeletonLoader.vue';
 import InteractiveMap from '../components/InteractiveMap.vue';
 
+const route = useRoute();
 const toast = useToast();
 const logs = ref([]);
 const equipmentList = ref([]);
@@ -256,42 +251,44 @@ const handleUpdateLog = async () => {
   }
 };
 
-onMounted(() => {
-  fetchLogs();
-  fetchEquipment();
-  fetchUsers();
+onMounted(async () => {
+  await fetchLogs();
+  await fetchEquipment();
+  await fetchUsers();
+
+  const logIdToEdit = route.query.edit;
+  if (logIdToEdit) {
+    const logToEdit = logs.value.find(log => log.id == logIdToEdit);
+    if (logToEdit) {
+      handleEditClick(logToEdit);
+    }
+  }
 });
 </script>
 
 <style scoped>
 .page-container { padding: 2rem; }
 .container { background-color: #fff; padding: 2em; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 2em; }
-.log-entry { position: relative; border: 1px solid #e0e0e0; padding: 1.5em; margin-bottom: 1em; border-radius: 8px; background-color: #fafafa; }
-.log-entry i { margin-right: 8px; color: #555; width: 1.2em; text-align: center; }
-ul { margin-top: 0.5em; padding-left: 2.2em; list-style-type: none; }
+.log-list { display: flex; flex-direction: column; gap: 1em; }
+.log-list-item { display: flex; justify-content: space-between; align-items: center; padding: 1em 1.5em; border: 1px solid #e0e0e0; border-radius: 8px; background-color: #fafafa; transition: box-shadow 0.2s, transform 0.2s; }
+.log-list-item:hover { transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.08); }
+.log-info { font-size: 1.1em; font-weight: 500; display: flex; align-items: center; }
+.log-info i { margin-right: 12px; color: #007bff; }
+.log-info strong { color: #495057; font-weight: 600; }
+.log-actions { display: flex; align-items: center; gap: 0.75em; }
+.action-button { display: inline-flex; align-items: center; gap: 6px; font-size: 0.9em; padding: 0.5em 1em; border: none; border-radius: 5px; color: white; cursor: pointer; text-decoration: none; }
+.view-button { background-color: #17a2b8; }
+.edit-button { background-color: #ffc107; }
+.delete-button { background-color: #dc3545; }
+.action-buttons-inline { display: inline-flex; gap: 0.75em; }
 form { display: flex; flex-direction: column; gap: 1em; }
 input, select, button { padding: 0.8em; font-size: 1em; border-radius: 5px; border: 1px solid #ccc; }
 select[multiple] { height: 150px; }
-button { background-color: #007bff; color: white; border: none; cursor: pointer; }
-.action-buttons { flex-shrink: 0; }
-.action-buttons button { display: inline-block; font-size: 0.8em; padding: 0.4em 0.8em; margin-left: 0.5em; }
-.action-buttons i { margin-right: 5px; }
-.edit-button { background-color: #ffc107; }
-.delete-button { background-color: #dc3545; }
-.log-header { display: flex; justify-content: space-between; align-items: center; }
+form > button { background-color: #007bff; color: white; border: none; cursor: pointer; }
 .spinner { display: inline-block; width: 1em; height: 1em; border: 2px solid rgba(255, 255, 255, 0.3); border-radius: 50%; border-top-color: #fff; animation: spin 1s ease-in-out infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 button:disabled { opacity: 0.7; cursor: not-allowed; }
-.location-input-group {
-    display: flex;
-}
-.location-input-group input {
-    flex-grow: 1;
-    border-radius: 5px 0 0 5px;
-}
-.search-map-button {
-    border-radius: 0 5px 5px 0;
-    border-left: none;
-    padding: 0 1em;
-}
+.location-input-group { display: flex; }
+.location-input-group input { flex-grow: 1; border-radius: 5px 0 0 5px; }
+.search-map-button { border-radius: 0 5px 5px 0; border-left: none; padding: 0 1em; }
 </style>
