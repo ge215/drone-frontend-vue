@@ -2,14 +2,20 @@
   <div class="page-container">
     <h1>飛行日誌管理</h1>
 
-    <!-- 編輯/新增 表單容器 -->
     <div class="container">
       <h2>{{ isEditing ? '編輯飛行日誌' : '新增飛行日誌' }}</h2>
       <form @submit.prevent="isEditing ? handleUpdateLog() : handleAddLog()">
         <input type="text" v-model="formModel.mission_name" placeholder="任務名稱" required>
         
-        <input type="text" v-model="formModel.location" placeholder="地點文字描述 (例如：陽明山擎天崗)" required>
-        <InteractiveMap @update:coordinates="updateCoordinates" />
+        <label for="location-text">地點文字描述:</label>
+        <div class="location-input-group">
+          <input type="text" id="location-text" v-model="formModel.location" placeholder="輸入地標或地址後按右方按鈕搜尋" required>
+          <button type="button" @click="searchLocationOnMap" class="search-map-button" title="在地圖上搜尋定位">
+            <i class="fa-solid fa-magnifying-glass-location"></i>
+          </button>
+        </div>
+        
+        <InteractiveMap :search-request="mapSearchRequest" @update:coordinates="updateCoordinates" />
 
         <input type="date" v-model="formModel.flight_date" required>
         <input type="number" v-model.number="formModel.duration_minutes" placeholder="飛行時長 (分鐘)" required>
@@ -37,7 +43,6 @@
       </form>
     </div>
 
-    <!-- 日誌列表區塊 -->
     <div class="container">
         <h2>飛行日誌列表</h2>
         <div v-if="isLoading">
@@ -89,6 +94,11 @@ const isLoading = ref(true);
 const isSubmitting = ref(false);
 const isEditing = ref(false);
 
+const mapSearchRequest = ref({
+  query: '',
+  trigger: 0,
+});
+
 const initialFormState = {
   mission_name: '',
   location: '',
@@ -102,7 +112,6 @@ const initialFormState = {
 };
 
 const formModel = ref({ ...initialFormState });
-
 const apiUrlBase = 'https://drone-api-v2.onrender.com';
 
 const updateCoordinates = (coords) => {
@@ -110,6 +119,17 @@ const updateCoordinates = (coords) => {
     formModel.value.twd97_x = coords.x.toFixed(3);
     formModel.value.twd97_y = coords.y.toFixed(3);
   }
+};
+
+const searchLocationOnMap = () => {
+  if (!formModel.value.location) {
+    toast.warning('請先輸入地點描述再進行搜尋。');
+    return;
+  }
+  mapSearchRequest.value = {
+    query: formModel.value.location,
+    trigger: Date.now(),
+  };
 };
 
 const fetchLogs = async () => {
@@ -141,7 +161,7 @@ const fetchUsers = async () => {
   if (!store.authToken) return;
   try {
     const response = await axios.get(`${apiUrlBase}/api/users/`, {
-         headers: { 'Authorization': `Token ${store.authToken}` }
+        headers: { 'Authorization': `Token ${store.authToken}` }
     });
     userList.value = response.data;
   } catch (error) {
@@ -189,6 +209,7 @@ const handleDeleteLog = async (logId) => {
 };
 
 const handleEditClick = (logToEdit) => {
+  isEditing.value = true;
   formModel.value = {
       id: logToEdit.id,
       mission_name: logToEdit.mission_name,
@@ -201,12 +222,16 @@ const handleEditClick = (logToEdit) => {
       twd97_x: logToEdit.twd97_x,
       twd97_y: logToEdit.twd97_y,
   };
-  isEditing.value = true;
+  
+  searchLocationOnMap();
+  
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 };
 
 const cancelEdit = () => {
   isEditing.value = false;
   formModel.value = { ...initialFormState };
+  mapSearchRequest.value = { query: '', trigger: 0 };
 };
 
 const handleUpdateLog = async () => {
@@ -257,4 +282,16 @@ button { background-color: #007bff; color: white; border: none; cursor: pointer;
 .spinner { display: inline-block; width: 1em; height: 1em; border: 2px solid rgba(255, 255, 255, 0.3); border-radius: 50%; border-top-color: #fff; animation: spin 1s ease-in-out infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 button:disabled { opacity: 0.7; cursor: not-allowed; }
+.location-input-group {
+    display: flex;
+}
+.location-input-group input {
+    flex-grow: 1;
+    border-radius: 5px 0 0 5px;
+}
+.search-map-button {
+    border-radius: 0 5px 5px 0;
+    border-left: none;
+    padding: 0 1em;
+}
 </style>

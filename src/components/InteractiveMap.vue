@@ -10,14 +10,18 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, onMounted, onUnmounted, watch } from 'vue';
 import L from 'leaflet';
-import 'leaflet-control-geocoder';
+// 我們不再需要 'leaflet-control-geocoder'，因為我們要自己處理搜尋邏輯
 import { convertLatLngToTWD97 } from '../utils/coord-converter.js';
 
 const props = defineProps({
-  initialCoords: Object
+  searchRequest: {
+    type: Object,
+    default: () => ({ query: '', trigger: 0 })
+  }
 });
+
 const emit = defineEmits(['update:coordinates']);
 
 const map = ref(null);
@@ -35,33 +39,69 @@ const updateMarkerAndCoords = (lat, lng) => {
   }
   
   map.value.panTo([lat, lng]);
-
   emit('update:coordinates', twd97Coords);
 };
 
+// [核心修改] 我們建立一個新的函式，直接呼叫 Geoapify API
+const triggerGeocodeWithGeoapify = (query) => {
+  if (!query) return;
+
+  // 從環境變數讀取您的 API 金鑰
+  const apiKey = import.meta.env.VITE_GEOAPIFY_API_KEY;
+
+  if (!apiKey) {
+    const errorMsg = "地圖金鑰 (API Key) 未設定，請檢查專案根目錄下的 .env.local 檔案。";
+    console.error(errorMsg);
+    alert(errorMsg);
+    return;
+  }
+
+  const url = `https://api.geoapify.com/v1/geocode/search?text=${encodeURIComponent(query)}&apiKey=${apiKey}`;
+
+  fetch(url)
+    .then(response => {
+      if (!response.ok) {
+        throw new Error('網路回應錯誤');
+      }
+      return response.json();
+    })
+    .then(data => {
+      if (data.features && data.features.length > 0) {
+        const [lon, lat] = data.features[0].geometry.coordinates;
+        updateMarkerAndCoords(lat, lon);
+        map.value.setView([lat, lon], 15);
+      } else {
+        alert('在地圖上找不到您輸入的地點。');
+      }
+    })
+    .catch(error => {
+      console.error('地理編碼 API 呼叫失敗:', error);
+      alert('搜尋地點時發生網路或伺服器錯誤。');
+    });
+};
+
+// 監聽器現在呼叫我們新的、可靠的函式
+watch(() => props.searchRequest, (newRequest) => {
+  if (newRequest && newRequest.trigger > 0) {
+    triggerGeocodeWithGeoapify(newRequest.query);
+  }
+}, { deep: true });
 
 const initMap = () => {
   const mapCenter = [23.973875, 120.982025];
-  map.value = L.map('map').setView(mapCenter, 8);
+  map.value = L.map('map', {
+      center: mapCenter,
+      zoom: 8,
+      zoomControl: true // 我們自己處理搜尋，可以把縮放控制項加回來
+  });
 
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
   }).addTo(map.value);
 
-  L.Control.geocoder({
-    defaultMarkGeocode: false,
-    placeholder: '搜尋地址或地標...',
-    errorMessage: '找不到結果',
-    collapsed: false,
-    geocoder: new L.Control.Geocoder.Nominatim()
-  })
-  .on('markgeocode', function(e) {
-    const { lat, lng } = e.geocode.center;
-    updateMarkerAndCoords(lat, lng);
-  })
-  .addTo(map.value);
-
-
+  // [核心修改] 我們不再需要加入 L.Control.Geocoder.Nominatim
+  // 因為我們來自父元件的搜尋請求會直接呼叫 Geoapify
+  
   map.value.on('click', (e) => {
     const { lat, lng } = e.latlng;
     updateMarkerAndCoords(lat, lng);
@@ -79,96 +119,8 @@ onUnmounted(() => {
 });
 </script>
 
-<!-- *** FIX: 分離 Scoped 和 Global 樣式 *** -->
-
-<!-- 這是只作用於此元件內部的樣式 -->
-<style scoped>
-.map-container {
-  height: 400px;
-  width: 100%;
-  border: 1px solid #ccc;
-  border-radius: 8px;
-  margin-top: 0.5em;
-  z-index: 0;
-}
-.coords-display {
-  margin-top: 0.5em;
-  font-size: 0.9em;
-  color: #555;
-  display: flex;
-  gap: 1em;
-}
-</style>
-
-<!-- 這是用來覆蓋 Leaflet Geocoder 外掛的全域樣式 -->
 <style>
-.leaflet-control-geocoder.leaflet-bar {
-  box-shadow: 0 1px 5px rgba(0,0,0,0.2) !important;
-  border-radius: 4px !important;
-  border: none !important;
-}
-
-.leaflet-control-geocoder-form input {
-  padding: 0.5em !important;
-  border: 1px solid #ccc !important;
-  border-radius: 4px 0 0 4px !important;
-  font-size: 14px !important;
-  width: 200px !important;
-  border-right: none !important;
-  outline: none !important;
-  background-color: white !important;
-}
-
-.leaflet-control-geocoder-form button {
-  background-color: #007bff !important;
-  border: 1px solid #007bff !important;
-  padding: 0 12px !important;
-  border-radius: 0 4px 4px 0 !important;
-  cursor: pointer !important;
-}
-
-.leaflet-control-geocoder-form button::after {
-  font-family: "Font Awesome 6 Free";
-  font-weight: 900;
-  content: "\f002"; /* 放大鏡圖示 */
-  color: white;
-  border: none;
-}
-
-.leaflet-control-geocoder-alternatives {
-  background-color: white !important;
-  border: 1px solid #ddd !important;
-  border-radius: 4px !important;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.1) !important;
-  list-style: none !important;
-  padding: 0 !important;
-  margin-top: 5px !important;
-}
-
-.leaflet-control-geocoder-alternatives li {
-  padding: 0.75em 1em !important;
-  cursor: pointer !important;
-  white-space: nowrap !important;
-  overflow: hidden !important;
-  text-overflow: ellipsis !important;
-  color: #333 !important;
-}
-
-.leaflet-control-geocoder-alternatives li:hover {
-  background-color: #f0f2f5 !important;
-  color: #000 !important;
-}
-
-.leaflet-control-geocoder-alternatives li:not(:last-child) {
-  border-bottom: 1px solid #eee !important;
-}
-
-.leaflet-control-geocoder-alternatives li > img {
-  display: none !important;
-}
-
-.leaflet-control-geocoder-alternatives .leaflet-control-geocoder-error {
-  color: #999 !important;
-  font-style: italic !important;
-}
+/* 樣式保持不變 */
+.map-container { height: 400px; width: 100%; border: 1px solid #ccc; border-radius: 8px; margin-top: 0.5em; z-index: 0; }
+.coords-display { margin-top: 0.5em; font-size: 0.9em; color: #555; display: flex; gap: 1em; }
 </style>
