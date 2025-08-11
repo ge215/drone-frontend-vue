@@ -1,42 +1,46 @@
 <template>
   <div class="page-container">
     <h1>設備管理</h1>
-    <p class="info">注意：只有管理員帳號才能在此頁面進行新增或刪除操作。</p>
 
-    <!-- 新增設備區塊 -->
     <div class="container">
-      <h2>新增設備</h2>
-      <form @submit.prevent="handleAddEquipment">
-        <select v-model="newEquipment.equipment_type" required>
-          <option disabled value="">請選擇設備類型</option>
-          <option value="drone">無人機</option>
-          <option value="battery">電池</option>
-          <option value="other">其他</option>
-        </select>
-        <input type="text" v-model="newEquipment.model_name" placeholder="品牌型號" required>
-        <input type="text" v-model="newEquipment.serial_number" placeholder="唯一識別碼 (序號)" required>
-        <input type="date" v-model="newEquipment.purchase_date">
-        <input v-if="newEquipment.equipment_type === 'battery'" type="number" v-model.number="newEquipment.cycle_count" placeholder="電池循環次數">
-        
-        <button type="submit">新增設備</button>
+      <h2>{{ isEditing ? '編輯設備' : '新增設備' }}</h2>
+      <form @submit.prevent="isEditing ? handleUpdateEquipment() : handleAddEquipment()">
+        <input type="text" v-model="formModel.model_name" placeholder="型號名稱" required>
+        <input type="text" v-model="formModel.serial_number" placeholder="序號" required>
+        <label>採購日期:</label>
+        <input type="date" v-model="formModel.purchase_date" required>
+
+        <label>設備照片 (選填):</label>
+        <input type="file" @change="handleFileChange" accept="image/*" ref="fileInputRef">
+        <button type="submit" :disabled="isSubmitting">
+          <span v-if="isSubmitting" class="spinner"></span>
+          <span v-else>{{ isEditing ? '儲存變更' : '新增設備' }}</span>
+        </button>
+        <button v-if="isEditing" type="button" @click="cancelEdit" class="cancel-button">取消</button>
       </form>
     </div>
 
-    <!-- 設備列表區塊 -->
     <div class="container">
       <h2>設備列表</h2>
-      <p v-if="isLoading">正在載入設備...</p>
-      <p v-else-if="equipmentList.length === 0">目前沒有任何設備。</p>
-      <div v-else class="equipment-grid">
-        <div v-for="equip in equipmentList" :key="equip.id" class="equipment-card">
-            <h4>{{ equip.model_name }}</h4>
-            <p><strong>序號:</strong> {{ equip.serial_number }}</p>
-            <p><strong>類型:</strong> {{ equip.equipment_type }}</p>
-            <p><strong>狀態:</strong> {{ equip.status }}</p>
-            <p v-if="equip.equipment_type === 'battery'"><strong>循環次數:</strong> {{ equip.cycle_count }}</p>
-            <button @click="handleDeleteEquipment(equip.id)" class="delete-button">刪除</button>
-        </div>
+      <div v-if="isLoading">
+        <SkeletonLoader v-for="n in 3" :key="n" />
       </div>
+      <p v-else-if="equipments.length === 0">目前沒有任何設備。</p>
+      <ul v-else class="equipment-list">
+        <li v-for="equip in equipments" :key="equip.id" class="equipment-item">
+          
+          <img :src="equip.equipment_image || '/placeholder.png'" alt="設備照片" class="equipment-image">
+          <div class="equipment-details">
+            <h3>{{ equip.model_name }}</h3>
+            <p><strong>序號:</strong> {{ equip.serial_number }}</p>
+            <p><strong>採購日期:</strong> {{ equip.purchase_date }}</p>
+          </div>
+          <div v-if="store.isAdmin" class="action-buttons">
+            <button @click="handleEditClick(equip)" class="edit-button" :disabled="isSubmitting">編輯</button>
+            <button @click="handleDeleteEquipment(equip.id)" class="delete-button" :disabled="isSubmitting">刪除</button>
+          </div>
+        </li>
+      </ul>
     </div>
   </div>
 </template>
@@ -45,104 +49,163 @@
 import { ref, onMounted } from 'vue';
 import axios from 'axios';
 import { store } from '../store.js';
+import { useToast } from 'vue-toastification';
+import SkeletonLoader from '../components/SkeletonLoader.vue';
 
-const equipmentList = ref([]);
+const toast = useToast();
+const equipments = ref([]);
 const isLoading = ref(true);
-const newEquipment = ref({
-  equipment_type: '',
-  model_name: '',
-  serial_number: '',
-  purchase_date: null,
-  cycle_count: 0,
-});
+const isSubmitting = ref(false);
+const isEditing = ref(false);
+
+const initialFormState = { id: null, model_name: '', serial_number: '', purchase_date: '' };
+const formModel = ref({ ...initialFormState });
+
+const selectedFile = ref(null);
+const fileInputRef = ref(null); // 建立一個 ref 來參照 file input 元素
 
 const apiUrlBase = 'https://drone-api-v2.onrender.com';
 
-const fetchEquipment = async () => {
-  // *** NEW: 加入詳細的偵錯日誌 ***
-  console.log('--- fetchEquipment() 被呼叫 ---');
-  console.log('檢查 store 的狀態:', JSON.stringify(store));
-  console.log('直接讀取 store.authToken:', store.authToken);
+const handleFileChange = (event) => {
+  selectedFile.value = event.target.files[0];
+};
 
+const fetchEquipment = async () => {
   isLoading.value = true;
-  if (!store.authToken) {
-      console.error('在 fetchEquipment 中找不到 authToken，請求被中止！');
-      isLoading.value = false;
-      return;
-  }
-  
-  console.log('Token 存在，準備發送 API 請求...');
   try {
-    const response = await axios.get(`${apiUrlBase}/api/equipment/`, {
-      headers: { 'Authorization': `Token ${store.authToken}` }
-    });
-    equipmentList.value = response.data;
-    console.log('成功獲取設備列表！');
+    const response = await axios.get(`${apiUrlBase}/api/equipment/`);
+    equipments.value = response.data;
   } catch (error) {
     console.error('獲取設備列表失敗:', error);
-    if (error.response && error.response.status === 403) {
-        alert('權限不足：只有管理員才能查看設備列表。');
-    } else {
-        alert('無法載入設備列表。');
-    }
+    toast.error('無法載入設備列表。');
   } finally {
     isLoading.value = false;
   }
 };
 
 const handleAddEquipment = async () => {
-  if (!store.authToken) return;
+  if (!store.authToken || !store.isAdmin) {
+    toast.error('您沒有權限執行此操作。');
+    return;
+  }
+  isSubmitting.value = true;
+  
+  const formData = new FormData();
+  formData.append('model_name', formModel.value.model_name);
+  formData.append('serial_number', formModel.value.serial_number);
+  formData.append('purchase_date', formModel.value.purchase_date);
+  if (selectedFile.value) {
+    formData.append('equipment_image', selectedFile.value);
+  }
+  
   try {
-    const payload = { ...newEquipment.value };
-    if (payload.equipment_type !== 'battery') {
-        delete payload.cycle_count;
-    }
-    if (!payload.purchase_date) {
-        delete payload.purchase_date;
-    }
-
-    await axios.post(`${apiUrlBase}/api/equipment/`, payload, {
+    await axios.post(`${apiUrlBase}/api/equipment/`, formData, {
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Token ${store.authToken}`
+        'Authorization': `Token ${store.authToken}`,
       }
     });
-    newEquipment.value = { equipment_type: '', model_name: '', serial_number: '', purchase_date: null, cycle_count: 0 };
+    formModel.value = { ...initialFormState };
+    selectedFile.value = null; 
+    if (fileInputRef.value) fileInputRef.value.value = '';
     fetchEquipment();
+    toast.success('設備新增成功！');
   } catch (error) {
-    console.error('新增設備失敗:', error.response.data);
-    alert(`新增失敗: ${JSON.stringify(error.response.data)}`);
+    console.error('新增設備失敗:', error.response?.data);
+    toast.error(`新增失敗: ${JSON.stringify(error.response?.data)}`);
+  } finally {
+    isSubmitting.value = false;
   }
 };
 
-const handleDeleteEquipment = async (equipId) => {
-  if (!store.authToken || !confirm('您確定要刪除這項設備嗎？')) return;
+const handleDeleteEquipment = async (id) => {
+  if (!store.authToken || !store.isAdmin || !confirm('您確定要刪除這項設備嗎？')) return;
+  
+  isSubmitting.value = true;
   try {
-    await axios.delete(`${apiUrlBase}/api/equipment/${equipId}/`, {
+    await axios.delete(`${apiUrlBase}/api/equipment/${id}/`, {
       headers: { 'Authorization': `Token ${store.authToken}` }
     });
     fetchEquipment();
+    toast.error('設備刪除成功！');
   } catch (error) {
     console.error('刪除設備失敗:', error);
-    alert('刪除失敗。');
+    toast.error('刪除失敗。');
+  } finally {
+    isSubmitting.value = false;
   }
 };
 
-onMounted(() => {
-  console.log('--- EquipmentView 元件已掛載 (mounted) ---');
-  fetchEquipment();
-});
+const handleEditClick = (equip) => {
+  isEditing.value = true;
+  formModel.value = { ...equip };
+  selectedFile.value = null;
+  if (fileInputRef.value) fileInputRef.value.value = '';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+};
+
+const cancelEdit = () => {
+  isEditing.value = false;
+  formModel.value = { ...initialFormState };
+  selectedFile.value = null;
+  if (fileInputRef.value) fileInputRef.value.value = '';
+};
+
+const handleUpdateEquipment = async () => {
+  if (!store.authToken || !store.isAdmin || !formModel.value.id) return;
+  isSubmitting.value = true;
+  const id = formModel.value.id;
+
+  const formData = new FormData();
+  formData.append('model_name', formModel.value.model_name);
+  formData.append('serial_number', formModel.value.serial_number);
+  formData.append('purchase_date', formModel.value.purchase_date);
+  if (selectedFile.value) {
+    formData.append('equipment_image', selectedFile.value);
+  }
+
+  try {
+    await axios.patch(`${apiUrlBase}/api/equipment/${id}/`, formData, {
+      headers: {
+        'Authorization': `Token ${store.authToken}`,
+      }
+    });
+    cancelEdit();
+    fetchEquipment();
+    toast.warning('設備更新成功！');
+  } catch (error) {
+    console.error('更新設備失敗:', error.response?.data);
+    toast.error(`更新失敗: ${JSON.stringify(error.response?.data)}`);
+  } finally {
+    isSubmitting.value = false;
+  }
+};
+
+onMounted(fetchEquipment);
 </script>
 
 <style scoped>
-/* 樣式保持不變 */
-.page-container { padding: 2rem; }
-.info { background-color: #fff3cd; border: 1px solid #ffeeba; color: #856404; padding: 1rem; border-radius: 8px; margin-bottom: 2em; }
+.page-container { padding: 2rem; max-width: 900px; margin: auto; }
 .container { background-color: #fff; padding: 2em; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 2em; }
 form { display: flex; flex-direction: column; gap: 1em; }
 input, select, button { padding: 0.8em; font-size: 1em; border-radius: 5px; border: 1px solid #ccc; }
-button { background-color: #007bff; color: white; border: none; cursor: pointer; }
-.equipment-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 1rem; }
-.equipment-card { border: 1px solid #e0e0e0; padding: 1.5em; border-radius: 8px; background-color: #fafafa; }
-.delete-button { background-color: #dc3545; color: white; margin-top: 1rem; width: 100%; }
+button { background-color: #007bff; color: white; border: none; cursor: pointer; transition: background-color 0.2s; }
+button:hover { background-color: #0056b3; }
+.cancel-button { background-color: #6c757d; margin-top: 0.5em; }
+.cancel-button:hover { background-color: #5a6268; }
+.spinner { display: inline-block; width: 1em; height: 1em; border: 2px solid rgba(255, 255, 255, 0.3); border-radius: 50%; border-top-color: #fff; animation: spin 1s ease-in-out infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+button:disabled { background-color: #007bff; opacity: 0.7; cursor: not-allowed; }
+
+.equipment-list { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 1.5rem; }
+.equipment-item { display: flex; align-items: center; gap: 1.5rem; padding: 1rem; border: 1px solid #e0e0e0; border-radius: 8px; transition: box-shadow 0.2s; }
+.equipment-item:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+.equipment-image { width: 100px; height: 100px; object-fit: cover; border-radius: 6px; background-color: #f0f0f0; flex-shrink: 0; }
+.equipment-details { flex-grow: 1; }
+.equipment-details h3 { margin: 0 0 0.5rem 0; }
+.equipment-details p { margin: 0.25rem 0; color: #555; font-size: 0.9em; }
+.action-buttons { display: flex; flex-direction: column; gap: 0.5rem; }
+.edit-button { background-color: #ffc107; }
+.edit-button:hover { background-color: #e0a800; }
+.delete-button { background-color: #dc3545; }
+.delete-button:hover { background-color: #c82333; }
 </style>
